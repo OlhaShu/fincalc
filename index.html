@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Фінансовий калькулятор — Аналіз інвестицій</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #34495e;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        .cash-flow-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+        .cash-flow-row label {
+            min-width: 60px;
+            margin-bottom: 0;
+        }
+        .btn {
+            display: inline-block;
+            background: #3498db;
+            color: #fff;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            text-align: center;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #2980b9;
+        }
+        .btn-add {
+            background: #2ecc71;
+            margin-bottom: 20px;
+        }
+        .btn-add:hover {
+            background: #27ae60;
+        }
+        .btn-remove {
+            background: #e74c3c;
+            padding: 10px;
+        }
+        .btn-remove:hover {
+            background: #c0392b;
+        }
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #ecf0f1;
+            border-radius: 5px;
+            border-left: 5px solid #3498db;
+        }
+        .results p {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        .positive { color: #27ae60; font-weight: bold; }
+        .negative { color: #c0392b; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Фінансовий калькулятор</h2>
+    
+    <div class="form-group">
+        <label for="initialInvestment">Початкові інвестиції (Рік 0), ₴:</label>
+        <input type="number" id="initialInvestment" value="100000" step="1000">
+        <small>Вводьте як додатне число (в розрахунках воно автоматично стане від'ємним грошовим потоком).</small>
+    </div>
+
+    <div class="form-group">
+        <label for="discountRate">Ставка дисконтування (%), напр. 10:</label>
+        <input type="number" id="discountRate" value="10" step="0.1">
+    </div>
+
+    <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
+
+    <div id="cashFlowsContainer">
+        <label>Грошові потоки за періодами (Cash Flows), ₴:</label>
+        </div>
+
+    <button class="btn btn-add" onclick="addCashFlow()">+ Додати рік</button>
+
+    <div class="actions">
+        <button class="btn" onclick="calculate()" style="width: 100%;">Розрахувати NPV та IRR</button>
+    </div>
+
+    <div class="results" id="resultsSection" style="display: none;">
+        <h3>Результати аналізу:</h3>
+        <p><strong>NPV (Чиста наведена вартість):</strong> <span id="npvResult"></span></p>
+        <p><strong>IRR (Внутрішня норма прибутку):</strong> <span id="irrResult"></span></p>
+        <p id="analysisConclusion" style="margin-top: 15px; font-style: italic;"></p>
+    </div>
+</div>
+
+<script>
+    let yearCount = 0;
+
+    // Ініціалізація перших трьох років при завантаженні
+    window.onload = function() {
+        addCashFlow(30000);
+        addCashFlow(40000);
+        addCashFlow(50000);
+    };
+
+    function addCashFlow(defaultValue = 0) {
+        yearCount++;
+        const container = document.getElementById('cashFlowsContainer');
+        
+        const row = document.createElement('div');
+        row.className = 'cash-flow-row';
+        row.id = `cf-row-${yearCount}`;
+        
+        row.innerHTML = `
+            <label>Рік ${yearCount}:</label>
+            <input type="number" class="cf-input" value="${defaultValue}" step="1000">
+            <button class="btn btn-remove" onclick="removeCashFlow(${yearCount})" title="Видалити рік">X</button>
+        `;
+        
+        container.appendChild(row);
+    }
+
+    function removeCashFlow(id) {
+        const row = document.getElementById(`cf-row-${id}`);
+        if (row) {
+            row.remove();
+        }
+    }
+
+    function calculate() {
+        // Отримуємо значення
+        const initialInvestment = parseFloat(document.getElementById('initialInvestment').value) || 0;
+        const discountRate = parseFloat(document.getElementById('discountRate').value) / 100 || 0;
+        
+        // Збираємо масив грошових потоків (Рік 0 - від'ємний)
+        const cashFlows = [-initialInvestment];
+        const cfInputs = document.querySelectorAll('.cf-input');
+        
+        cfInputs.forEach(input => {
+            cashFlows.push(parseFloat(input.value) || 0);
+        });
+
+        // 1. Розрахунок NPV
+        let npv = 0;
+        for (let t = 0; t < cashFlows.length; t++) {
+            npv += cashFlows[t] / Math.pow(1 + discountRate, t);
+        }
+
+        // 2. Розрахунок IRR (метод Ньютона-Рафсона)
+        let irr = calculateIRR(cashFlows);
+
+        // Виведення результатів
+        document.getElementById('resultsSection').style.display = 'block';
+        
+        const npvElement = document.getElementById('npvResult');
+        npvElement.textContent = npv.toFixed(2) + ' ₴';
+        npvElement.className = npv >= 0 ? 'positive' : 'negative';
+
+        const irrElement = document.getElementById('irrResult');
+        if (irr !== null && !isNaN(irr)) {
+            const irrPercentage = (irr * 100).toFixed(2);
+            irrElement.textContent = irrPercentage + ' %';
+            irrElement.className = irr >= discountRate ? 'positive' : 'negative';
+        } else {
+            irrElement.textContent = 'Неможливо розрахувати (немає зміни знаку грошових потоків)';
+            irrElement.className = 'negative';
+        }
+
+        // Висновок
+        const conclusion = document.getElementById('analysisConclusion');
+        if (npv > 0) {
+            conclusion.innerHTML = "💡 <strong>Висновок:</strong> Проєкт є <span class='positive'>привабливим</span>. NPV більше нуля, а IRR перевищує ставку дисконтування. Інвестиція генерує додаткову вартість.";
+        } else if (npv < 0) {
+            conclusion.innerHTML = "⚠️ <strong>Висновок:</strong> Проєкт <span class='negative'>нерентабельний</span>. NPV менше нуля. Альтернативні інвестиції з обраною ставкою дисконтування принесуть більше прибутку.";
+        } else {
+            conclusion.innerHTML = "⚖️ <strong>Висновок:</strong> Проєкт на межі беззбитковості (NPV = 0).";
+        }
+    }
+
+    // Алгоритм розрахунку IRR
+    function calculateIRR(cashFlows, guess = 0.1) {
+        const maxTries = 1000;
+        const delta = 0.00001;
+        let rate = guess;
+
+        for (let i = 0; i < maxTries; i++) {
+            let npvValue = 0;
+            let derivativeNpv = 0;
+
+            for (let t = 0; t < cashFlows.length; t++) {
+                npvValue += cashFlows[t] / Math.pow(1 + rate, t);
+                if (t > 0) {
+                    derivativeNpv -= t * cashFlows[t] / Math.pow(1 + rate, t + 1);
+                }
+            }
+
+            const newRate = rate - npvValue / derivativeNpv;
+
+            if (Math.abs(newRate - rate) < delta) {
+                return newRate;
+            }
+            rate = newRate;
+        }
+        return null; // Якщо не зійшлося
+    }
+</script>
+
+</body>
+</html>
